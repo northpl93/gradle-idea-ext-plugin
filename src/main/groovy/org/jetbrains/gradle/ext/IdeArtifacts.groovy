@@ -64,6 +64,12 @@ abstract class RecursiveArtifact extends TypedArtifact {
     return child
   }
 
+  ExtractedLibraries extractedLibraries(Configuration configuration) {
+    def child = new ExtractedLibraries(project, configuration)
+    children.add(child)
+    return child
+  }
+
   ModuleOutput moduleOutput(String moduleName) {
     def child = new ModuleOutput(project, moduleName)
     children.add(child)
@@ -231,6 +237,42 @@ class LibraryFiles extends TypedArtifact {
 
     project.copy {
       from libraries
+      into destination
+    }
+  }
+}
+
+class ExtractedLibraries extends TypedArtifact {
+  Configuration configuration
+
+  ExtractedLibraries(Project project, Configuration configuration) {
+    super(project, ArtifactType.EXTRACTED_DIR)
+    this.configuration = configuration
+  }
+
+  Set<File> getFiles() {
+    ArtifactCollection artifacts = configuration.getIncoming().artifactView({
+      it.lenient(true)
+    }).getArtifacts()
+
+    return artifacts.artifacts.collect { it.file }
+  }
+
+  @Override
+  Map<String, ?> toMap() {
+    def files = getFiles()
+    return super.toMap() << ["sourceFiles": files.collect { it.absolutePath.replace('\\' as char, '/' as char) }]
+  }
+
+  @Override
+  void buildTo(File destination) {
+    if (!destination.isDirectory()) {
+      return
+    }
+
+    def files = getFiles()
+    project.copy {
+      from files.collect { project.zipTree(it) }
       into destination
     }
   }
